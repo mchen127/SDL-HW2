@@ -285,9 +285,9 @@ project/
 5. ✅ **Step 5:** Implement training loop (trainer + validator + checkpointing)
 6. ✅ **Step 6:** Implement evaluation pipeline (evaluator + metrics)
 7. ✅ **Step 7:** Create entry scripts (train.py, eval.py)
-8. ⬜ **Step 8:** Run full pipeline: train on all subset sizes
-9. ⬜ **Step 9:** Run evaluation on all subset sizes
-10. ⬜ **Step 10:** Create visualization notebook
+8. ✅ **Step 8:** Run full pipeline: train on all subset sizes
+9. ✅ **Step 9:** Run evaluation on all subset sizes
+10. ✅ **Step 10:** Create visualization notebook
 
 ---
 
