@@ -42,5 +42,28 @@ PATIENCE = 5 # For early stopping
 
 # -- Artifacts Path --
 RESULTS_DIR = os.path.join(PROJECT_ROOT, "results")
-MODEL_PATH = os.path.join(RESULTS_DIR, "best_model.pth")
-SCALER_PATH = os.path.join(RESULTS_DIR, "scaler.pkl")
+
+
+def _artifact_suffix(input_width: int, label_width: int, shift: int) -> str:
+    return f"iw{input_width}_lw{label_width}_sh{shift}"
+
+
+def model_path(input_width: int = INPUT_WIDTH, label_width: int = LABEL_WIDTH, shift: int = SHIFT) -> str:
+    """Return the path for the trained model corresponding to the supplied window config."""
+    suffix = _artifact_suffix(input_width, label_width, shift)
+    return os.path.join(RESULTS_DIR, f"best_model_{suffix}.pth")
+
+
+def scaler_path(input_width: int = INPUT_WIDTH, label_width: int = LABEL_WIDTH, shift: int = SHIFT) -> str:
+    suffix = _artifact_suffix(input_width, label_width, shift)
+    return os.path.join(RESULTS_DIR, f"scaler_{suffix}.pkl")
+
+
+def plot_path(input_width: int = INPUT_WIDTH, label_width: int = LABEL_WIDTH, shift: int = SHIFT) -> str:
+    suffix = _artifact_suffix(input_width, label_width, shift)
+    return os.path.join(RESULTS_DIR, f"test_predictions_{suffix}.png")
+
+
+def results_csv_path(input_width: int = INPUT_WIDTH, label_width: int = LABEL_WIDTH, shift: int = SHIFT) -> str:
+    suffix = _artifact_suffix(input_width, label_width, shift)
+    return os.path.join(RESULTS_DIR, f"test_results_{suffix}.csv")

@@ -1,9 +1,9 @@
+import argparse
 import os
 import joblib
 import numpy as np
 import pandas as pd
 import torch
-import torch.nn as nn
 from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -13,18 +13,67 @@ from src.dataset import JenaClimateDataset, engineer_features
 from src.model import LSTMForecast
 
 
-def evaluate_model():
+def _parse_window_args():
+    parser = argparse.ArgumentParser(
+        description="Evaluate the trained model with custom window settings."
+    )
+    parser.add_argument(
+        "--input-width",
+        type=int,
+        default=config.INPUT_WIDTH,
+        help="Number of historical steps fed to the model (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--label-width",
+        type=int,
+        default=config.LABEL_WIDTH,
+        help="Number of target steps evaluated per sample (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--shift",
+        type=int,
+        default=config.SHIFT,
+        help="Offset between input and label windows (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--output-size",
+        type=int,
+        default=None,
+        help="Expected dimensionality of the model output. Defaults to label width.",
+    )
+
+    args = parser.parse_args()
+    args.output_size = args.output_size if args.output_size is not None else args.label_width
+    return args
+
+
+def _validate_window_params(label_width: int, output_size: int) -> None:
+    if label_width != output_size:
+        raise ValueError(
+            "label_width and output_size must match the windowing used during training."
+        )
+
+
+def evaluate_model(
+    input_width: int = config.INPUT_WIDTH,
+    label_width: int = config.LABEL_WIDTH,
+    shift: int = config.SHIFT,
+    output_size: int = config.OUTPUT_SIZE,
+):
     """
     Loads the test data and a trained model to evaluate its performance.
     """
+    _validate_window_params(label_width, output_size)
     # --- 1. Load Test Data and Artifacts ---
-    if not all([os.path.exists(p) for p in [config.TEST_CSV_PATH, config.SCALER_PATH, config.MODEL_PATH]]):
+    model_filepath = config.model_path(input_width, label_width, shift)
+    scaler_filepath = config.scaler_path(input_width, label_width, shift)
+    if not all([os.path.exists(p) for p in [config.TEST_CSV_PATH, scaler_filepath, model_filepath]]):
         print("Ensure test data, scaler, and model exist. Run preprocess.py and main.py first.")
         return
 
     print("Loading test data and artifacts...")
     test_df = pd.read_csv(config.TEST_CSV_PATH)
-    scaler = joblib.load(config.SCALER_PATH)
+    scaler = joblib.load(scaler_filepath)
 
     # --- 2. Process Test Data ---
     print("Processing test data...")
@@ -38,16 +87,16 @@ def evaluate_model():
 
     # --- 3. Create Test DataLoader ---
     test_dataset = JenaClimateDataset(
-        test_df_scaled, config.INPUT_WIDTH, config.LABEL_WIDTH, config.SHIFT
+        test_df_scaled, input_width, label_width, shift
     )
     test_loader = DataLoader(test_dataset, batch_size=config.BATCH_SIZE, shuffle=False)
 
     # --- 4. Load Model ---
     print("Loading model...")
     model = LSTMForecast(
-        config.INPUT_SIZE, config.HIDDEN_SIZE, config.NUM_LAYERS, config.OUTPUT_SIZE
+        config.INPUT_SIZE, config.HIDDEN_SIZE, config.NUM_LAYERS, output_size
     ).to(config.DEVICE)
-    model.load_state_dict(torch.load(config.MODEL_PATH, map_location=config.DEVICE))
+    model.load_state_dict(torch.load(model_filepath, map_location=config.DEVICE))
     model.eval()
 
     # --- 5. Make Predictions ---
@@ -87,6 +136,22 @@ def evaluate_model():
     print(f"Test Set Root Mean Squared Error (RMSE): {rmse:.4f} °C")
     print(f"Test Set Mean Absolute Percentage Error (MAPE): {mape:.2f}%")
 
+    # --- 7a. Save Results to CSV ---
+    print("Saving results to CSV...")
+    if label_width == 1:
+        results_df = pd.DataFrame({
+            'prediction': preds_unscaled.flatten(),
+            'actual': labels_unscaled.flatten()
+        })
+    else: # For multi-step predictions
+        pred_cols = [f'prediction_t+{i+1}' for i in range(label_width)]
+        actual_cols = [f'actual_t+{i+1}' for i in range(label_width)]
+        results_df = pd.DataFrame(np.hstack([preds_unscaled, labels_unscaled]), columns=pred_cols + actual_cols)
+
+    results_path = config.results_csv_path(input_width, label_width, shift)
+    results_df.to_csv(results_path, index=False)
+    print(f"Results saved to {results_path}")
+
     # --- 8. Visualize Results ---
     print("Visualizing predictions...")
     sns.set_style("whitegrid")
@@ -102,11 +167,17 @@ def evaluate_model():
     plt.tight_layout()
     
     # Save the plot
-    plot_path = os.path.join(config.RESULTS_DIR, "test_predictions.png")
+    plot_path = config.plot_path(input_width, label_width, shift)
     plt.savefig(plot_path)
     print(f"Prediction plot saved to {plot_path}")
     plt.show()
 
 
 if __name__ == "__main__":
-    evaluate_model()
+    args = _parse_window_args()
+    evaluate_model(
+        input_width=args.input_width,
+        label_width=args.label_width,
+        shift=args.shift,
+        output_size=args.output_size,
+    )

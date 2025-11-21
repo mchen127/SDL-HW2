@@ -22,7 +22,7 @@ This script is responsible for the initial, one-time data preparation.
 - **Downsample**: Resamples the 10-minute data to 1-hour intervals by taking the mean. This reduces noise and computational load.
 - **Forward-fill**: After resampling, use forward-fill (`ffill`) to propagate the last valid observation forward. This is a standard, causal method to handle missing values in time-series data without introducing data leakage, and it ensures the sequence remains unbroken for the LSTM model.
 - **Split**: Splits the cleaned, downsampled data chronologically into `train.csv`, `val.csv`, and `test.csv` (70-20-10 split).
-- **Output**: Saves the three new CSV files to the `problem2/data/` directory.
+- **Output**: Saves the three new CSV files to the `data/` directory.
 
 ### `src/dataset.py`
 This module focuses on preparing the data for the model.
@@ -37,18 +37,18 @@ Defines the neural network architecture.
 A centralized configuration file.
 - Contains all hyperparameters, file paths, data split ratios, and training parameters. This allows for easy tuning without modifying the core logic.
 
-### `src/main.py`
+### `train.py`
 The main script for orchestrating the training process.
 - Loads `train.csv` and `val.csv`.
 - Calls `engineer_features` to create cyclical features.
 - **Crucially, it fits a `StandardScaler` on the training data *only*** to prevent data leakage.
-- Saves the fitted scaler to `problem2/results/` for use during evaluation.
+- Saves the fitted scaler to `results/` for use during evaluation.
 - Transforms the training and validation sets using the fitted scaler.
 - Creates PyTorch `DataLoader`s for batching.
 - Implements the training loop with early stopping to prevent overfitting.
-- Saves the best performing model to `problem2/results/`.
+- Saves the best performing model to `results/`.
 
-### `src/eval.py`
+### `eval.py`
 A dedicated script for final model evaluation on the unseen test set.
 - Loads `test.csv`.
 - Applies the same feature engineering.
@@ -62,22 +62,24 @@ The end-to-end process is executed with three main commands:
 
 1.  **Prepare Data (Run once)**:
     ```bash
-    python -m src.preprocess
+    python src/preprocess.py
     ```
 
 2.  **Train Model**:
     ```bash
-    python -m src.main
+    python train.py
     ```
+    You can override the windowing hyperparameters at runtime, e.g. `python train.py --input-width 72 --shift 6 --label-width 6`. The model's `output_size` is automatically matched to the provided `label_width` unless you explicitly pass `--output-size`.
 
 3.  **Evaluate Model**:
     ```bash
-    python -m src.eval
+    python eval.py
     ```
+    Invoke it with the same CLI flags (`--input-width`, `--label-width`, `--shift`) so it picks the matching `results/best_model_*` and `results/scaler_*` files.
 
 ## 5. Key Design Decisions
 
-- **Modularity**: Separating the one-time data preparation (`preprocess.py`) from the repeatable training workflow (`main.py`) makes the codebase cleaner and more maintainable.
+- **Modularity**: Separating the one-time data preparation (`preprocess.py`) from the repeatable training workflow (`train.py`) makes the codebase cleaner and more maintainable.
 - **Data Leakage Prevention**: The `StandardScaler` is fitted *only* on the training data and then used to transform all three data splits. This is critical for obtaining a reliable measure of the model's performance.
 - **Reproducibility**: By saving the exact scaler and the best model, the evaluation process is completely reproducible and independent of the training script.
 - **Cyclical Features**: Transforming time and wind direction into `sin`/`cos` components is a standard best practice for time-series and cyclical data, as it helps the model learn the patterns more effectively.
