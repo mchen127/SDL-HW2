@@ -6,7 +6,7 @@ from pathlib import Path
 from datetime import datetime
 
 from src.config import get_config, update_config
-from src.models import create_alexnet, create_alexnet_torchvision
+from src.models import create_alexnet, create_resnet18
 from src.data import get_train_loader, get_val_loader
 from src.training import Trainer
 
@@ -20,7 +20,7 @@ def parse_args():
     parser.add_argument(
         "--model",
         type=str,
-        choices=["alexnet", "alexnet_torchvision"],
+        choices=["alexnet", "resnet18"],
         default="alexnet",
         help="Model architecture to use (default: alexnet)",
     )
@@ -56,6 +56,12 @@ def parse_args():
         help="Early stopping patience (default: 5)",
     )
     parser.add_argument(
+        "--log-interval",
+        type=int,
+        default=None,
+        help="Epoch interval for flushing logs to disk (default: 10)",
+    )
+    parser.add_argument(
         "--device",
         type=str,
         choices=["cuda", "cpu", "cuda:0", "cuda:1"],
@@ -85,8 +91,8 @@ def create_model(model_name, num_classes=100):
     """
     if model_name == "alexnet":
         return create_alexnet(num_classes=num_classes)
-    elif model_name == "alexnet_torchvision":
-        return create_alexnet_torchvision(num_classes=num_classes)
+    elif model_name == "resnet18":
+        return create_resnet18(num_classes=num_classes)
     else:
         raise ValueError(f"Unknown model: {model_name}")
 
@@ -97,6 +103,7 @@ def train_single_subset(
     config,
     device,
     checkpoint_dir,
+    logs_dir,
 ):
     """
     Train a single model on a specific subset size.
@@ -141,6 +148,8 @@ def train_single_subset(
     
     # Create trainer
     subset_checkpoint_dir = checkpoint_dir / f"subset_{subset_size:.4f}"
+    subset_logs_dir = logs_dir / f"subset_{subset_size:.4f}"
+    subset_logs_dir.mkdir(parents=True, exist_ok=True)
     trainer = Trainer(
         model=model,
         train_loader=train_loader,
@@ -151,6 +160,8 @@ def train_single_subset(
         lr=config["training"]["learning_rate"],
         momentum=config["training"]["momentum"],
         weight_decay=config["training"]["weight_decay"],
+        logs_dir=subset_logs_dir,
+        log_interval=config["training"]["log_interval"],
     )
     
     # Train
@@ -179,6 +190,8 @@ def main():
         updates.setdefault("training", {})["num_epochs"] = args.num_epochs
     if args.patience is not None:
         updates.setdefault("training", {})["patience"] = args.patience
+    if args.log_interval is not None:
+        updates.setdefault("training", {})["log_interval"] = args.log_interval
     if args.device is not None:
         updates.setdefault("device", {})["device"] = args.device
     
@@ -197,12 +210,17 @@ def main():
     # Determine checkpoint directory
     if args.checkpoint_dir:
         checkpoint_dir = Path(args.checkpoint_dir)
+        run_id = checkpoint_dir.name
     else:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        checkpoint_dir = config["paths"]["checkpoints_dir"] / args.model / timestamp
+        run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+        checkpoint_dir = config["paths"]["checkpoints_dir"] / args.model / run_id
+
+    logs_dir = config["paths"]["logs_dir"] / args.model / run_id
     
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    logs_dir.mkdir(parents=True, exist_ok=True)
     print(f"Checkpoint directory: {checkpoint_dir}")
+    print(f"Logs directory: {logs_dir}")
     
     # Train on each subset size
     all_histories = {}
@@ -214,6 +232,7 @@ def main():
                 config=config,
                 device=device,
                 checkpoint_dir=checkpoint_dir,
+                logs_dir=logs_dir,
             )
             all_histories[subset_size] = history
         except Exception as e:

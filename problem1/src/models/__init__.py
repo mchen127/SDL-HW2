@@ -1,5 +1,6 @@
 """Model architectures for image classification."""
 
-from .alexnet import AlexNet, create_alexnet, create_alexnet_torchvision
+from .alexnet import create_alexnet
+from .resnet18 import create_resnet18
 
-__all__ = ["AlexNet", "create_alexnet", "create_alexnet_torchvision"]
+__all__ = ["create_alexnet", "create_resnet18"]

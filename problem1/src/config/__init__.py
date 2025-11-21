@@ -22,7 +22,7 @@ MODEL_CONFIG = {
 DATA_CONFIG = {
     "dataset_name": "timm/mini-imagenet",
     "batch_size": 128,
-    "num_workers": 32,
+    "num_workers": 64,
     "pin_memory": True,
     "subset_sizes": [1.0, 0.5, 0.25, 0.125, 0.0625],  # Geometric progression
     "random_state": 42,
@@ -37,6 +37,7 @@ TRAINING_CONFIG = {
     "momentum": 0.9,
     "weight_decay": 5e-4,
     "patience": 5,  # Early stopping patience (None = no early stopping)
+    "log_interval": 10,  # How often to flush metric logs to disk (in epochs)
 }
 
 # ============================================================================
@@ -52,10 +53,11 @@ DEVICE_CONFIG = {
 PATHS_CONFIG = {
     "project_root": PROJECT_ROOT,
     "checkpoints_dir": PROJECT_ROOT / "checkpoints",
+    "logs_dir": PROJECT_ROOT / "logs",
 }
 
 # Ensure directories exist
-for dir_path in [PATHS_CONFIG["checkpoints_dir"]]:
+for dir_path in [PATHS_CONFIG["checkpoints_dir"], PATHS_CONFIG["logs_dir"]]:
     dir_path.mkdir(parents=True, exist_ok=True)
 
 # ============================================================================
